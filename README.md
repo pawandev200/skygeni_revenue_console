@@ -25,8 +25,8 @@ Answers the question: **"Why are we behind (or ahead) on revenue this quarter, a
 
 ```bash
 # Clone the repo
-git clone <your-repo-url>
-cd revenue-intelligence-console
+git clone https://github.com/pawandev200/skygeni_revenue_console.git
+cd skygeni_revenue_console
 
 # Install backend
 cd backend
@@ -224,7 +224,6 @@ All endpoints are at `http://localhost:5001/api/`
 - **TypeScript** - Type safety
 - **Material-UI v5** - Component library
 - **D3.js v7** - Data visualization (sparklines, trend chart)
-- **SWR** - Data fetching with auto-refresh
 - **Vite** - Build tool (fast dev server)
 
 ---
@@ -241,8 +240,7 @@ JSON Files → Backend Service → API Endpoints → Frontend Hooks → UI Compo
 
 1. **Backend starts** → Loads 5 JSON files into memory
 2. **Frontend loads** → Makes 5 API calls (summary, drivers, risk, recommendations, trend)
-3. **Data refreshes** → Auto-refreshes every 60 seconds (SWR)
-4. **User sees** → Dashboard with all metrics, charts, and recommendations
+3. **User sees** → Dashboard with all metrics, charts, and recommendations
 
 ### Key Business Logic
 
@@ -321,7 +319,7 @@ const HIGH_VALUE_THRESHOLD = 50000; // High-priority deal value
 const MIN_REP_DEALS = 5;            // Minimum deals to judge performance
 ```
 
-File: `backend/src/routes/dashboardRoutes.ts`
+File: `backend/src/routes/analytics.controller.ts`
 
 ```typescript
 const RECOVERY_RATE = 0.3;          // Expected recovery % for stale deals
@@ -329,13 +327,13 @@ const INDUSTRY_WIN_RATE_MIN = 25;   // Industry benchmark for win rate
 const MAX_RECOMMENDATIONS = 5;      // Max recommendations to show
 ```
 
-### Frontend Settings
+<!-- ### Frontend Settings
 
 File: `frontend/src/hooks/useDashboard.ts`
 
 ```typescript
 const REFRESH_INTERVAL = 60000;     // Auto-refresh every 60 seconds
-```
+``` -->
 
 ---
 
@@ -509,7 +507,7 @@ Would need:
 
 ### Frontend
 1. **`src/pages/Dashboard.tsx`** - Main dashboard page layout
-2. **`src/hooks/useDashboard.ts`** - Data fetching with SWR
+2. **`src/hooks/useDashboard.ts`** - API data fetching
 3. **`src/components/QtdHeader.tsx`** - Top revenue banner
 4. **`src/components/charts/RevenueTrendChart.tsx`** - D3.js chart
 
