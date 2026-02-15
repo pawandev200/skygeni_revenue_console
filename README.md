@@ -66,7 +66,7 @@ Visit: **http://localhost:5173/**
 ## Project Structure
 
 ```
-revenue-intelligence-console/
+skygeni_revenue_console/
 ├── backend/                    # Express + TypeScript API
 │   ├── src/
 │   │   ├── routes/
@@ -153,9 +153,10 @@ All endpoints are at `http://localhost:5001/api/`
 ```json
 {
   "pipelineSize": {
-    "value": 4800000,
-    "changePercentage": 12.0,
-    "trend": [3200000, 3500000, ..., 4800000]
+    "value": 715799,
+    "change": 392531,
+    "changePercentage": 121.425875743965,
+    "trend": [574744, 904880, ..., 715799]
   },
   "winRate": { ... },
   "averageDealSize": { ... },
@@ -230,11 +231,24 @@ All endpoints are at `http://localhost:5001/api/`
 
 ## How It Works
 
+### Architecture Overview
+
+```
+Frontend (React)
+      ↓
+API Layer (Express)
+      ↓
+Analytics Service (Business Logic)
+      ↓
+In-memory JSON data
+
+```
 ### Data Flow
 
 ```
 JSON Files → Backend Service → API Endpoints → Frontend Hooks → UI Components
 ```
+
 
 ### Step-by-Step
 
@@ -269,6 +283,25 @@ reps.filter(r => r.winRate < avgWinRate && r.dealsWorked >= 5)
 ```
 
 ---
+
+### Reference Date Approach
+
+All time-based calculations use the latest available month in `targets.json`
+instead of the system clock (`dayjs()`).
+
+This ensures:
+
+- Deterministic results when working with historical datasets
+- Consistent quarter and month calculations
+- Stable trend analysis independent of runtime date
+
+This approach prevents mismatches when evaluating past performance data.
+
+---
+
+This project uses in-memory storage for simplicity.
+For production scale, PostgreSQL + Redis caching would be recommended.
+
 
 ## Features
 
@@ -319,7 +352,7 @@ const HIGH_VALUE_THRESHOLD = 50000; // High-priority deal value
 const MIN_REP_DEALS = 5;            // Minimum deals to judge performance
 ```
 
-File: `backend/src/routes/analytics.controller.ts`
+File: `backend/src/controllers/analytics.controller.ts`
 
 ```typescript
 const RECOVERY_RATE = 0.3;          // Expected recovery % for stale deals
@@ -483,11 +516,7 @@ PORT=8001 npm run dev
 
 ## Performance
 
-### Current (600 deals)
-- API response time: < 100ms
-- Frontend load time: < 2 seconds
-- Memory usage: ~50MB backend, ~100MB frontend
-- Works great for: 10-50 concurrent users
+Designed for small to medium datasets (hundreds of deals).
 
 ### At Scale (6,000 deals)
 Would need:
