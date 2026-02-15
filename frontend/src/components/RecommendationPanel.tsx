@@ -67,7 +67,8 @@ export default function RecommendationPanel({ recommendations }: Props) {
     <Paper
       elevation={0}
       sx={{
-        p: 3,
+        pt: 3,
+        px: 3,
         borderRadius: "8px",
         border: "1px solid #e0e4ec",
       }}
@@ -83,7 +84,7 @@ export default function RecommendationPanel({ recommendations }: Props) {
         Recommended Actions
       </Box>
 
-      <Divider sx={{ borderColor: "#f0f2f5", mb: 1 }} />
+      <Divider sx={{ borderColor: "#f0f2f5", mb: -1 }} />
 
       <Box>
         {recommendations.map((rec, index) => (
@@ -129,7 +130,7 @@ export default function RecommendationPanel({ recommendations }: Props) {
                   {rec.description}
                 </Box>
 
-                <Box
+                {/* <Box
                   sx={{
                     fontSize: "13px",
                     color: "#718096",
@@ -137,9 +138,9 @@ export default function RecommendationPanel({ recommendations }: Props) {
                   }}
                 >
                   {rec.impact}
-                </Box>
+                </Box> */}
 
-                <Box
+                {/* <Box
                   sx={{
                     fontSize: "13px",
                     color: "#2b6cb0",
@@ -147,12 +148,12 @@ export default function RecommendationPanel({ recommendations }: Props) {
                   }}
                 >
                   {rec.action}
-                </Box>
+                </Box> */}
               </Box>
             </Box>
 
             {index !== recommendations.length - 1 && (
-              <Divider sx={{ borderColor: "#f0f2f5" }} />
+              <Divider sx={{ my: -1, borderColor: "#f0f2f5" }} />
             )}
           </Box>
         ))}

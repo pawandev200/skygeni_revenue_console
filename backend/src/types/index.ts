@@ -31,9 +31,24 @@ export interface Activity {
   type: string;
   timestamp: string;
 }
+export interface Recommendation {
+  id: string;
+  priority: "high" | "medium" | "low";
+  category: "deals" | "reps" | "accounts" | "strategy";
+  title: string;
+  description: string;
+  impact: string;
+  action: string;
+}
 
-/* -------- FRONTEND RESPONSE TYPES -------- */
+export interface MonthlyRevenueTrend {
+  month: string; // Display name like "Oct", "Nov"
+  revenue: number; // Actual revenue
+  target: number; // Target for the month
+  achieved: number; // Percentage achieved (revenue/target * 100)
+}
 
+// FRONTEND RESPONSE TYPES:
 export interface SummaryResponse {
   currentQuarterRevenue: number;
   target: number;
@@ -54,12 +69,4 @@ export interface RevenueDriversResponse { // RevenueDrivers
   winRate: MetricWithTrend;
   averageDealSize: MetricWithTrend;
   salesCycleTime: MetricWithTrend;
-}
-
-
-export interface MonthlyRevenueTrend {
-  month: string; // Display name like "Oct", "Nov"
-  revenue: number; // Actual revenue
-  target: number; // Target for the month
-  achieved: number; // Percentage achieved (revenue/target * 100)
 }

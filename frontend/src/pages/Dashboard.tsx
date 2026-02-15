@@ -18,7 +18,7 @@ export default function Dashboard() {
 
   if (loading) return <CircularProgress />;
 
-  console.log("Recommendations:", recommendations);
+  // console.log("Recommendations:", recommendations);
 
   return (
     <Box sx={{ px: 4, py: 3, minHeight: "100vh" }}>
@@ -47,8 +47,6 @@ export default function Dashboard() {
             <RiskPanel data={risks} />
           </Box>
         )}
-         
-        {/* {console.log("Recommendations:", recommendations)}   */}
 
         {recommendations.length > 0 && (
           <Box>
@@ -61,7 +59,9 @@ export default function Dashboard() {
             <Paper
               elevation={0}
               sx={{
-                p: 3,
+                pt: 3,
+                px: 3,
+                pb: 2.5,
                 borderRadius: "8px",
                 border: "1px solid #e0e4ec",
                 width: "100%",

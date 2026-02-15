@@ -7,28 +7,17 @@ import {
   Rep,
   Activity,
   Account,
+  Recommendation,
 } from "../types";
 
-/* ================= CONFIG ================= */
 
+// CONFIG:
 const RECOVERY_RATE = 0.3;
 const INDUSTRY_WIN_RATE_MIN = 25;
 const MAX_RECOMMENDATIONS = 5;
 
-/* ================= TYPES ================= */
 
-interface Recommendation {
-  id: string;
-  priority: "high" | "medium" | "low";
-  category: "deals" | "reps" | "accounts" | "strategy";
-  title: string;
-  description: string;
-  impact: string;
-  action: string;
-}
-
-/* ================= IN-MEMORY DATA CACHE ================= */
-
+// IN-MEMORY CACHE
 const db = {
   deals: loadJSON<Deal>("deals.json"),
   targets: loadJSON<Target>("targets.json"),
@@ -37,25 +26,13 @@ const db = {
   accounts: loadJSON<Account>("accounts.json"),
 };
 
-/* ================= HELPERS ================= */
 
+// HELPERS function: 
 function round(value: number, precision = 1) {
   return Number(value.toFixed(precision));
 }
 
-function roundMetric(metric: any, precision = 1) {
-  return {
-    ...metric,
-    value: round(metric.value, precision),
-    change: round(metric.change, precision),
-    changePercentage: round(metric.changePercentage, 1),
-    trend: metric.trend.map((v: number) =>
-      round(v, precision)
-    ),
-  };
-}
-
-/* ================= SUMMARY ================= */
+// SUMMARY:
 
 export function getSummary(req: Request, res: Response) {
   try {
@@ -74,96 +51,54 @@ export function getSummary(req: Request, res: Response) {
       qoqChange: round(qoq, 1),
     });
   } catch (err) {
-    console.error("Error in getSummary:", err);
+    console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 }
 
-/* ================= DRIVERS ================= */
+// DRIVERS:
 
 export function getDrivers(req: Request, res: Response) {
   try {
     const drivers = service.getRevenueDrivers(db.deals, db.targets);
 
-    const formatted = {
-      pipelineSize: roundMetric(drivers.pipelineSize, 0),
-      winRate: roundMetric(drivers.winRate, 1),
-      averageDealSize: roundMetric(drivers.averageDealSize, 0),
-      salesCycleTime: roundMetric(drivers.salesCycleTime, 0),
-    };
-
-    res.json(formatted);
+    res.json(drivers);
   } catch (err) {
-    console.error("Error in getDrivers:", err);
+    console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 }
 
-/* ================= RISK ================= */
+// RISK:
 
 export function getRiskFactors(req: Request, res: Response) {
   try {
     res.json({
-      staleDeals: service.getStaleDeals(
-        db.deals,
-        db.accounts,
-        db.reps,
-        db.targets
-      ),
-      underperformingReps: service.getUnderperformingReps(
-        db.deals,
-        db.reps
-      ),
-      lowActivityAccounts:
-        service.getLowActivityAccounts(
-          db.deals,
-          db.activities,
-          db.accounts,
-          db.reps,
-          db.targets
-        ),
+      staleDeals: service.getStaleDeals( db.deals, db.accounts, db.reps, db.targets ),
+      underperformingReps: service.getUnderperformingReps(db.deals, db.reps),
+      lowActivityAccounts: service.getLowActivityAccounts(db.deals, db.activities, db.accounts),
     });
   } catch (err) {
-    console.error("Error in getRiskFactors:", err);
+    console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 }
 
-/* ================= RECOMMENDATIONS ================= */
+// RECOMMENDATIONS:
 
-export function getRecommendations(
-  req: Request,
-  res: Response
-) {
+export function getRecommendations(req: Request, res: Response) {
   try {
-    const stale = service.getStaleDeals(
-      db.deals,
-      db.accounts,
-      db.reps,
-      db.targets
-    );
+    const stale = service.getStaleDeals(db.deals, db.accounts, db.reps, db.targets);
 
-    const underperformers =
-      service.getUnderperformingReps(db.deals, db.reps);
-
-    const lowActivity =
-      service.getLowActivityAccounts(
-        db.deals,
-        db.activities,
-        db.accounts,
-        db.reps,
-        db.targets
-      );
+    const underperformers = service.getUnderperformingReps(db.deals, db.reps);
+    const lowActivity = service.getLowActivityAccounts(db.deals, db.activities, db.accounts);
+    const winRate = service.calculateWinRate(db.deals) * 100;
+    // console.log(`Overall Win Rate: ${winRate.toFixed(1)}%`);
 
     const recommendations: Recommendation[] = [];
 
-    /* ----- STALE DEALS ----- */
     if (stale.length > 0) {
-      const totalValue = stale.reduce(
-        (sum, d) => sum + d.value,
-        0
-      );
-
+      const totalValue = stale.reduce((sum, d) => sum + d.value, 0);
       const recoverable = totalValue * RECOVERY_RATE;
 
       recommendations.push({
@@ -180,54 +115,19 @@ export function getRecommendations(
           recoverable / 1_000_000
         ).toFixed(1)}M`,
         action:
-          "Schedule executive sponsor reviews for top 5 deals",
+          "Schedule executive sponsor reviews for top deals",
       });
     }
 
-    /* ----- UNDERPERFORMING REPS ----- */
-    if (underperformers.length > 0) {
-      const rep = underperformers[0];
-
-      recommendations.push({
-        id: "rec-2",
-        priority: "high",
-        category: "reps",
-        title: `Coach ${rep.repName} on deal qualification`,
-        description: `${rep.repName} has a ${rep.winRate.toFixed(
-          0
-        )}% win rate vs team average.`,
-        impact:
-          "Improving to team average could increase quarterly revenue",
-        action:
-          "Implement structured deal review sessions",
-      });
+    if (underperformers.length > 0) { 
+      const rep = underperformers[0]; 
+      recommendations.push({ id: "rec-2", priority: "high", category: "reps", title: `Coach ${rep.repName} on deal qualification`, description: `${rep.repName} has a ${rep.winRate.toFixed( 1 )}% win rate vs team average.`, impact: "Improving to team average could increase quarterly revenue", action: "Implement structured deal review sessions", }); 
     }
 
-    /* ----- LOW ACTIVITY ACCOUNTS ----- */
-    if (lowActivity.length > 0) {
-      const totalValue = lowActivity.reduce(
-        (sum, a) => sum + a.totalValue,
-        0
-      );
-
-      recommendations.push({
-        id: "rec-3",
-        priority: "medium",
-        category: "accounts",
-        title: "Re-engage inactive pipeline accounts",
-        description: `${lowActivity.length} accounts with $${(
-          totalValue / 1_000_000
-        ).toFixed(1)}M in pipeline show low activity.`,
-        impact:
-          "Re-engagement may reduce pipeline slippage risk",
-        action:
-          "Launch targeted re-engagement outreach campaign",
-      });
+    if (lowActivity.length > 0) { 
+      const totalValue = lowActivity.reduce( (sum, a) => sum + a.totalValue, 0 ); 
+      recommendations.push({ id: "rec-3", priority: "medium", category: "accounts", title: "Re-engage inactive pipeline accounts", description: `${lowActivity.length} accounts with $${( totalValue / 1_000_000 ).toFixed(1)}M in pipeline show low activity.`, impact: "Re-engagement may reduce pipeline slippage risk", action: "Launch targeted re-engagement outreach campaign", }); 
     }
-
-    /* ----- STRATEGY LEVEL ----- */
-    const winRate =
-      service.getWinRate(db.deals) * 100;
 
     if (winRate < INDUSTRY_WIN_RATE_MIN) {
       recommendations.push({
@@ -246,43 +146,23 @@ export function getRecommendations(
     }
 
     res.json({
-      recommendations: recommendations.slice(
-        0,
-        MAX_RECOMMENDATIONS
-      ),
+      recommendations: recommendations.slice( 0, MAX_RECOMMENDATIONS )
     });
   } catch (err) {
-    console.error("Error in getRecommendations:", err);
+    console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 }
 
-/* ================= TREND ================= */
+// TREND:
 
-export function getTrendLast6Months(
-  req: Request,
-  res: Response
-) {
+export function getTrendLast6Months( req: Request, res: Response ) {
   try {
-    const trend =
-      service.getRevenueTrendLast6Months(
-        db.deals,
-        db.targets
-      );
+    const trend = service.getRevenueTrendLast6Months( db.deals, db.targets );
 
-    res.json({
-      months: trend.map((m) => ({
-        ...m,
-        revenue: Math.round(m.revenue),
-        target: Math.round(m.target),
-        achieved: round(m.achieved, 1),
-      })),
-    });
+    res.json({ months: trend });
   } catch (err) {
-    console.error(
-      "Error in getTrendLast6Months:",
-      err
-    );
+    console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 }

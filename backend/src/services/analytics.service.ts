@@ -15,22 +15,19 @@ import {
 dayjs.extend(quarterOfYear);
 dayjs.extend(isBetween);
 
-// Drivers: Revenue trend → correct to use closed_at, Pipeline & win-rate monthly trends → created_at may be fine
-
-
-/* CONFIG: */
+// CONFIG:
 
 const STALE_DAYS = 30;
 const LOW_ACTIVITY_DAYS = 30;
 const HIGH_VALUE_THRESHOLD = 50000;
 const MIN_REP_DEALS = 5;
 
-/*Helper function: */
+// HELPERS function: 
 
-function buildMap<T extends { [key: string]: any }>(
+function buildMap<T, K extends keyof T>(
   items: T[],
-  key: keyof T
-): Map<any, T> {
+  key: K
+): Map<T[K], T> {
   return new Map(items.map((item) => [item[key], item]));
 }
 
@@ -54,68 +51,61 @@ function calculateMetricWithTrend(
   };
 }
 
-// find the last valid month in your targets
 function getReferenceDate(targets: Target[]) {
-  const latestTarget = targets
-    .map(t => dayjs(t.month))
+  return targets
+    .map((t) => dayjs(t.month))
     .sort((a, b) => b.valueOf() - a.valueOf())[0];
-  return latestTarget || dayjs();
 }
 
-/* SUMMARY */
+// SUMMARY:
 
 export function getCurrentQuarterRevenue(deals: Deal[], targets: Target[]) {
-  // const now = dayjs();
-  // const start = now.startOf("quarter");
-  // const end = now.endOf("quarter");
-  const refDate = getReferenceDate(targets); // Pegs logic to Dec 2025
+  const refDate = getReferenceDate(targets);
   const start = refDate.startOf("quarter");
   const end = refDate.endOf("quarter");
 
-  const closedDeals = deals.filter(
-    (d) =>
+  const closedDeals = deals.filter((d) => {
+    if (!d.closed_at) return false; 
+    
+    return (
       d.stage === "Closed Won" &&
-      d.amount &&
-      d.closed_at &&
+      d.amount != null &&
       dayjs(d.closed_at).isBetween(start, end, null, "[]")
-  );
+    );
+  });
 
   return sumAmounts(closedDeals);
 }
 
 export function getQuarterTarget(targets: Target[]) {
-  // const now = dayjs();
-  const refDate = getReferenceDate(targets); 
-  const currentQuarter = refDate.quarter();
-  const currentYear = refDate.year();
+  const refDate = getReferenceDate(targets);
+  const quarter = refDate.quarter();
+  const year = refDate.year();
 
   return targets
     .filter((t) => {
       const date = dayjs(t.month);
-      return (
-        date.quarter() === currentQuarter &&
-        date.year() === currentYear
-      );
+      return date.quarter() === quarter && date.year() === year;
     })
     .reduce((sum, t) => sum + t.target, 0);
 }
 
 export function getQoQChange(deals: Deal[], targets: Target[]) {
-  // const now = dayjs();
   const refDate = getReferenceDate(targets);
-  const currentQStart = refDate.startOf("quarter");
-  const currentQEnd = refDate.endOf("quarter");
 
-  const prevQStart = refDate.subtract(1, "quarter").startOf("quarter");
-  const prevQEnd = refDate.subtract(1, "quarter").endOf("quarter");
+  const currentStart = refDate.startOf("quarter");
+  const currentEnd = refDate.endOf("quarter");
+
+  const prevStart = refDate.subtract(1, "quarter").startOf("quarter");
+  const prevEnd = refDate.subtract(1, "quarter").endOf("quarter");
 
   const currentRevenue = sumAmounts(
     deals.filter(
       (d) =>
         d.stage === "Closed Won" &&
-        d.amount &&
+        d.amount != null &&
         d.closed_at &&
-        dayjs(d.closed_at).isBetween(currentQStart, currentQEnd, null, "[]")
+        dayjs(d.closed_at).isBetween(currentStart, currentEnd, null, "[]")
     )
   );
 
@@ -123,166 +113,44 @@ export function getQoQChange(deals: Deal[], targets: Target[]) {
     deals.filter(
       (d) =>
         d.stage === "Closed Won" &&
-        d.amount &&
+        d.amount != null &&
         d.closed_at &&
-        dayjs(d.closed_at).isBetween(prevQStart, prevQEnd, null, "[]")
+        dayjs(d.closed_at).isBetween(prevStart, prevEnd, null, "[]")
     )
   );
 
-  if (!prevRevenue) return 0;
-
-  return ((currentRevenue - prevRevenue) / prevRevenue) * 100;
+  return prevRevenue ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0;
 }
 
-/*DRIVERS */
+/* ================= MONTH GROUPING (Performance Boost) ================= */
 
-export function getPipelineSize(deals: Deal[]) {
-  return sumAmounts(
-    deals.filter(
-      (d) =>
-        d.stage !== "Closed Won" &&
-        d.stage !== "Closed Lost" &&
-        d.amount
-    )
-  );
+function groupDealsByMonth(
+  deals: Deal[],
+  field: "created_at" | "closed_at"
+) {
+  const map = new Map<string, Deal[]>();
+
+  deals.forEach((d) => {
+    const date = d[field];
+    if (!date) return;
+
+    const key = dayjs(date).format("YYYY-MM");
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(d);
+  });
+
+  return map;
 }
 
-export function getWinRate(deals: Deal[]) {
+// DRIVERS:
+
+export function calculateWinRate(deals: Deal[]) {
   const closed = deals.filter(
     (d) => d.stage === "Closed Won" || d.stage === "Closed Lost"
   );
+  const won = closed.filter((d) => d.stage === "Closed Won" && d.amount != null);
 
-  const won = closed.filter((d) => d.stage === "Closed Won");
-
-  return closed.length ? won.length / closed.length : 0; // decimal
-}
-
-export function getAverageDealSize(deals: Deal[]) {
-  const wonDeals = deals.filter(
-    (d) => d.stage === "Closed Won" && d.amount
-  );
-
-  return wonDeals.length
-    ? sumAmounts(wonDeals) / wonDeals.length
-    : 0;
-}
-
-export function getSalesCycleTime(deals: Deal[]) {
-  const closedDeals = deals.filter(
-    (d) =>
-      d.stage === "Closed Won" &&
-      d.created_at &&
-      d.closed_at
-  );
-
-  if (!closedDeals.length) return 0;
-
-  const totalDays = closedDeals.reduce((sum, d) => {
-    return (
-      sum +
-      dayjs(d.closed_at).diff(dayjs(d.created_at), "day")
-    );
-  }, 0);
-
-  return totalDays / closedDeals.length;
-}
-
-export function getRevenueDrivers(deals: Deal[], targets: Target[]) {
-  // const now = dayjs();
-  const refDate = getReferenceDate(targets);
-  const getMonthDeals = (offset: number) => {
-    const date = refDate.subtract(offset, "month");
-    return deals.filter(
-      (d) =>
-        d.created_at &&
-        dayjs(d.created_at).isSame(date, "month")
-    );
-  };
-
-  const current = getMonthDeals(0);
-  const previous = getMonthDeals(1);
-
-  const pipelineTrend = Array.from({ length: 6 }).map((_, i) =>
-    getPipelineSize(getMonthDeals(5 - i))
-  );
-
-  const winRateTrend = Array.from({ length: 6 }).map(
-    (_, i) => getWinRate(getMonthDeals(5 - i)) * 100
-  );
-
-  const avgDealTrend = Array.from({ length: 6 }).map((_, i) =>
-    getAverageDealSize(getMonthDeals(5 - i))
-  );
-
-  const cycleTrend = Array.from({ length: 6 }).map((_, i) =>
-    getSalesCycleTime(getMonthDeals(5 - i))
-  );
-
-  return {
-    pipelineSize: calculateMetricWithTrend(
-      getPipelineSize(current),
-      getPipelineSize(previous),
-      pipelineTrend
-    ),
-    winRate: calculateMetricWithTrend(
-      getWinRate(current) * 100,
-      getWinRate(previous) * 100,
-      winRateTrend
-    ),
-    averageDealSize: calculateMetricWithTrend(
-      getAverageDealSize(current),
-      getAverageDealSize(previous),
-      avgDealTrend
-    ),
-    salesCycleTime: calculateMetricWithTrend(
-      getSalesCycleTime(current),
-      getSalesCycleTime(previous),
-      cycleTrend
-    ),
-  };
-}
-
-/* RISK */
-
-export function getStaleDeals(
-  deals: Deal[],
-  accounts: Account[],
-  reps: Rep[],
-   targets: Target[]
-) {
-  const refDate = getReferenceDate(targets);
-
-  const accountMap = buildMap(accounts, "account_id");
-  const repMap = buildMap(reps, "rep_id");
-
-  return deals
-    .filter(
-      (d) =>
-        d.stage !== "Closed Won" &&
-        d.stage !== "Closed Lost" &&
-        d.amount &&
-        d.created_at && refDate.diff(dayjs(d.created_at), "day") > STALE_DAYS
-    )
-    .map((d) => {
-      const account = accountMap.get(d.account_id);
-      const rep = repMap.get(d.rep_id);
-
-      return {
-        dealId: d.deal_id,
-        accountName: account?.name ?? "Unknown",
-        segment: account?.segment ?? "Unknown",
-        repName: rep?.name ?? "Unknown",
-        value: d.amount ?? 0,
-        daysStale: d.created_at ? refDate.diff(dayjs(d.created_at), "day") : 0,
-      };
-    })
-    .filter(
-      (d) =>
-        d.segment === "Enterprise" ||
-        d.value > HIGH_VALUE_THRESHOLD
-    )
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
+  return closed.length ? won.length / closed.length : 0;
 }
 
 export function getUnderperformingReps(
@@ -294,17 +162,18 @@ export function getUnderperformingReps(
       (d) => d.rep_id === rep.rep_id
     );
 
-    const winRate = getWinRate(repDeals);
     const closedDeals = repDeals.filter(
       (d) =>
         d.stage === "Closed Won" ||
         d.stage === "Closed Lost"
     );
 
+    const winRate = calculateWinRate(repDeals) * 100;
+
     return {
       repId: rep.rep_id,
       repName: rep.name,
-      winRate: winRate * 100,
+      winRate,
       dealsWorked: closedDeals.length,
     };
   });
@@ -328,16 +197,13 @@ export function getUnderperformingReps(
 export function getLowActivityAccounts(
   deals: Deal[],
   activities: Activity[],
-  accounts: Account[],
-  reps: Rep[],
-  targets: Target[]
+  accounts: Account[]
 ) {
-  const refDate = getReferenceDate(targets);
-  const accountMap = buildMap(accounts, "account_id");
-  const repMap = buildMap(reps, "rep_id");
+  const now = dayjs();
 
-  const recentActivities = activities.filter(
-    (a) => refDate.diff(dayjs(a.timestamp), "day") < LOW_ACTIVITY_DAYS
+  const recentActivities = activities.filter((a) =>
+    now.diff(dayjs(a.timestamp), "day") <
+    LOW_ACTIVITY_DAYS
   );
 
   const activeDealIds = new Set(
@@ -359,18 +225,21 @@ export function getLowActivityAccounts(
   });
 
   return Array.from(grouped.entries())
-    .map(([accountId, accountDeals]) => {
-      const account = accountMap.get(accountId);
-      const rep = repMap.get(accountDeals[0]?.rep_id);
+    .map(([accountId, deals]) => {
+      const account = accounts.find(
+        (a) => a.account_id === accountId
+      );
 
-      const totalValue = sumAmounts(accountDeals);
+      const totalValue = deals.reduce(
+        (sum, d) => sum + (d.amount ?? 0),
+        0
+      );
 
       return {
         accountId,
         accountName: account?.name ?? "Unknown",
         segment: account?.segment ?? "Unknown",
-        repName: rep?.name ?? "Unassigned",
-        openDeals: accountDeals.length,
+        openDeals: deals.length,
         totalValue,
       };
     })
@@ -378,32 +247,150 @@ export function getLowActivityAccounts(
     .slice(0, 15);
 }
 
-/* TREND */
+
+export function getRevenueDrivers(deals: Deal[], targets: Target[]) {
+  const refDate = getReferenceDate(targets);
+
+  const createdMap = groupDealsByMonth(deals, "created_at");
+  const closedMap = groupDealsByMonth(deals, "closed_at");
+
+  const getMonthKey = (offset: number) => refDate.subtract(offset, "month").format("YYYY-MM");
+
+  const pipelineTrend: number[] = [];
+  const winRateTrend: number[] = [];
+  const avgDealTrend: number[] = [];
+  const cycleTrend: number[] = [];
+
+  for (let i = 5; i >= 0; i--) {
+    const createdDeals = createdMap.get(getMonthKey(i)) ?? [];
+    const closedDeals = closedMap.get(getMonthKey(i)) ?? [];
+
+    pipelineTrend.push(
+      sumAmounts( createdDeals.filter(
+          (d) =>
+            d.stage !== "Closed Won" &&
+            d.stage !== "Closed Lost" &&
+            d.amount != null
+        )
+      )
+    );
+
+    const closedValid = closedDeals.filter(
+      (d) => d.stage === "Closed Won" || d.stage === "Closed Lost"
+    );
+
+    const wonDeals = closedDeals.filter(
+      (d) => d.stage === "Closed Won" && d.amount != null
+    );
+
+    winRateTrend.push(
+      closedValid.length ? (wonDeals.length / closedValid.length) * 100 : 0
+    );
+
+    avgDealTrend.push(
+      wonDeals.length ? sumAmounts(wonDeals) / wonDeals.length : 0
+    );
+
+    const totalCycle = wonDeals.reduce(
+      (sum, d) =>
+        sum + dayjs(d.closed_at).diff(dayjs(d.created_at), "day"),
+      0
+    );
+
+    cycleTrend.push(
+      wonDeals.length ? totalCycle / wonDeals.length : 0
+    );
+  }
+  
+  const currentKey = getMonthKey(0);
+  const prevKey = getMonthKey(1);
+
+  // month-over-month comparison.
+  return {
+    pipelineSize: calculateMetricWithTrend(
+      pipelineTrend[5], // current month
+      pipelineTrend[4], // previous month
+      pipelineTrend
+    ),
+    winRate: calculateMetricWithTrend(
+      winRateTrend[5],
+      winRateTrend[4],
+      winRateTrend
+    ),
+    averageDealSize: calculateMetricWithTrend(
+      avgDealTrend[5],
+      avgDealTrend[4],
+      avgDealTrend
+    ),
+    salesCycleTime: calculateMetricWithTrend(
+      cycleTrend[5],
+      cycleTrend[4],
+      cycleTrend
+    ),
+  };
+}
+
+// RECOMMENDATIONS:
+
+export function getStaleDeals(
+  deals: Deal[],
+  accounts: Account[],
+  reps: Rep[],
+  targets: Target[]
+) {
+  const refDate = getReferenceDate(targets);
+  const accountMap = buildMap(accounts, "account_id");
+  const repMap = buildMap(reps, "rep_id");
+
+  return deals
+    .filter(
+      (d) =>
+        d.stage !== "Closed Won" &&
+        d.stage !== "Closed Lost" &&
+        d.amount != null &&
+        d.created_at &&
+        refDate.diff(dayjs(d.created_at), "day") > STALE_DAYS
+    )
+    .map((d) => ({
+      dealId: d.deal_id,
+      accountName: accountMap.get(d.account_id)?.name ?? "Unknown",
+      segment: accountMap.get(d.account_id)?.segment ?? "Unknown",
+      repName: repMap.get(d.rep_id)?.name ?? "Unknown",
+      value: d.amount ?? 0,
+      daysStale: refDate.diff(dayjs(d.created_at), "day"),
+    }))
+    .filter(
+      (d) => d.segment === "Enterprise" || d.value > HIGH_VALUE_THRESHOLD
+    )
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+}
+
+// TREND:
 
 export function getRevenueTrendLast6Months(
   deals: Deal[],
   targets: Target[]
 ): MonthlyRevenueTrend[] {
-  // const now = dayjs();
   const refDate = getReferenceDate(targets);
+  const closedMap = groupDealsByMonth(deals, "closed_at");
+
   const results: MonthlyRevenueTrend[] = [];
 
   for (let i = 5; i >= 0; i--) {
     const date = refDate.subtract(i, "month");
+    const key = date.format("YYYY-MM");
+
+    const monthlyDeals = closedMap.get(key) ?? [];
+
     const revenue = sumAmounts(
-      deals.filter(
-        (d) =>
-          d.stage === "Closed Won" &&
-          d.amount &&
-          d.closed_at &&
-          dayjs(d.closed_at).isSame(date, "month")
-      )
+      monthlyDeals.filter((d) => {
+        if (!d.closed_at) return false; // safety check
+        return d.stage === "Closed Won" && d.amount != null;
+      })
     );
 
-    const monthKey = date.format("YYYY-MM");
-    const target =
-      targets.find((t) => t.month === monthKey)?.target ??
-      0;
+    const target = targets.find((t) => t.month === key)?.target ?? 0;
 
     results.push({
       month: date.format("MMM"),

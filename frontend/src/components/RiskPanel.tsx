@@ -17,25 +17,21 @@ export default function RiskPanel({ data }: Props) {
 
   const topUnderperformer = data.underperformingReps.length > 0 ? data.underperformingReps[0] : null;
 
-  // const risks = [
-  //     `${data.staleDeals.length} Enterprise deals stuck over 30 days`,
-  //     `${data.underperformingReps.length} Reps with low win rate`,
-  //     `${data.lowActivityAccounts.length} Accounts with no recent activity`,
-  // ];
-
   const risks = [
-    `${data.staleDeals.length} deals stuck over 30 days`,
+    `${data.staleDeals.length} Enterprise deals stuck over 30 days`,
     topUnderperformer
       ? `Rep ${topUnderperformer.repName} – Win Rate: ${topUnderperformer.winRate.toFixed(1)}%`
       : `No underperforming reps`,
-    `${data.lowActivityAccounts.length} accounts with low activity`,
+    `${data.lowActivityAccounts.length} Accounts with no recent activity`,
   ];
 
   return (
     <Paper
       elevation={0}
       sx={{
-        p: 3,
+        pt: 3,
+        px: 3,
+        pb: 4,
         borderRadius: "8px",
         border: "1px solid #e0e4ec",
         width: "100%",

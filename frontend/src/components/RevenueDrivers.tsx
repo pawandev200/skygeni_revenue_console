@@ -7,6 +7,7 @@ interface Props {
 }
 
 export default function RevenueDrivers({ data }: Props) {
+  // {console.log("Metric:", data)}
   return (
     <Paper 
     elevation={0} 
@@ -36,11 +37,11 @@ export default function RevenueDrivers({ data }: Props) {
       />
 
       <Divider sx={{ my: 2 }} />
-
+      
       <Metric
         label="Win Rate"
         metric={data.winRate}
-        format={(v) => `${(v * 100).toFixed(0)}%`}
+        format={(v) => `${(v).toFixed(1)}%`}  // v * 100, backend is already sending percentage
         color="#2563eb"
         type="bar"
       />
@@ -63,6 +64,7 @@ export default function RevenueDrivers({ data }: Props) {
         format={(v) => `${v.toFixed(0)} Days`}
         color="#f59e0b"
         type="area"
+        isShowDays={true}
       />
     </Paper>
   );
@@ -74,6 +76,7 @@ function Metric({
   format,
   color,
   type,
+  isShowDays = false,
 }: {
   label: string;
   metric: {
@@ -81,10 +84,12 @@ function Metric({
     change: number;
     changePercentage: number;
     trend: number[];
+    
   };
   format: (v: number) => string;
   color: string;
   type: "area" | "bar";
+  isShowDays?: boolean;
 }) {
   const isPositive = metric.changePercentage >= 0;
 
@@ -112,7 +117,7 @@ function Metric({
             }}
           >
             {isPositive ? "+" : ""}
-            {metric.changePercentage.toFixed(1)}%
+            {isShowDays ? `${metric.change} Days` : `${metric.changePercentage.toFixed(1)}%`}
           </Typography>
         </Box>
       </Box>

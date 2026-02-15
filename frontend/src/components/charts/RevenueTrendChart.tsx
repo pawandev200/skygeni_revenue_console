@@ -7,6 +7,11 @@ interface Props {
 }
 
 export default function RevenueTrendChart({ data }: Props) {
+
+  console.log("Revenue Trend Data:", data); 
+  // Blue bars => Actual Revenue (Closed Won)
+  // Orange line => Target Revenue
+
   const ref = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
@@ -26,8 +31,11 @@ export default function RevenueTrendChart({ data }: Props) {
     const months = data.map(d => d.month);
     const revenues = data.map(d => d.revenue);
     const targets = data.map(d => d.target);
-
     const maxValue = d3.max([...revenues, ...targets]) ?? 0;
+
+    // const achieved = data.map(d => d.achieved);
+    // const maxValue = d3.max(achieved) ?? 0;
+
 
     /* ---------------- SCALES ---------------- */
 
@@ -40,6 +48,7 @@ export default function RevenueTrendChart({ data }: Props) {
     const y = d3
       .scaleLinear()
       .domain([0, maxValue * 1.1])
+      // .domain([0, Math.max(100, maxValue * 1.1)])
       .nice()
       .range([height - margin.bottom, margin.top]);
 
@@ -49,6 +58,7 @@ export default function RevenueTrendChart({ data }: Props) {
       .axisLeft(y)
       .ticks(5)
       .tickFormat(d => `$${(Number(d) / 1000).toFixed(0)}k`)
+      // .tickFormat(d => `${Number(d).toFixed(0)}%`)
       .tickSize(-width + margin.left + margin.right);
 
     const gy = svg
@@ -74,8 +84,10 @@ export default function RevenueTrendChart({ data }: Props) {
       .append("rect")
       .attr("x", d => x(d.month)!)
       .attr("y", d => y(d.revenue))
-      .attr("width", x.bandwidth())
       .attr("height", d => height - margin.bottom - y(d.revenue))
+      // .attr("y", d => y(d.achieved))
+      // .attr("height", d => height - margin.bottom - y(d.achieved))
+      .attr("width", x.bandwidth())
       .attr("fill", "#2563eb")
       .attr("rx", 4);
 
@@ -84,6 +96,7 @@ export default function RevenueTrendChart({ data }: Props) {
     const line = d3.line<RevenueTrendMonth>()
       .x(d => x(d.month)! + x.bandwidth() / 2)
       .y(d => y(d.target))
+      // .y(d => y(d.achieved))
       .curve(d3.curveMonotoneX);
 
     svg.append("path")
@@ -101,6 +114,7 @@ export default function RevenueTrendChart({ data }: Props) {
       .append("circle")
       .attr("cx", d => x(d.month)! + x.bandwidth() / 2)
       .attr("cy", d => y(d.target))
+      // .attr("cy", d => y(d.achieved))
       .attr("r", 5)
       .attr("fill", "white")
       .attr("stroke", "#f59e0b")
